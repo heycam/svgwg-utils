@@ -1,27 +1,99 @@
 #!/usr/bin/perl -w
 
+# topic-updater.pl
+#
+# Reads the [[Topic database]] page on the SVG WG wiki and updates the
+# [[Topics]] page based on it.
+#
+# Configuration
+# =============
+#
+# Create a file named ~/.topic-updater/account that has your W3C account
+# username on the first line and the password on the second line.  This
+# account will be used to log in to and edit the wiki.
+#
+# Format of [[Topic database]]
+# ============================
+#
+# The source wiki text of the [[Topic database]] page must be formatted
+# as follows.  There are three top-level sections that must be present:
+# the "Topics" section, the "Teleconferences" section and the "Meetings"
+# section.  The sections must occur in this order.
+#
+# The == Topics == section
+# ------------------------
+#
+# This section lists the topics that links to meeting minute discussions
+# will be sorted under.  Each topic is a sub-section that consists of
+# a short description of the topic followed by a bulleted list item for
+# each link to a teleconference of F2F meeting minutes page where that
+# topic was discussed.
+#
+# Example:
+#
+#   == Topics ==
+#
+#   === Replacing xlink:href ===
+#
+#   Discussions about replacing xlink:href with href or src attributes.
+#
+#   * http://www.w3.org/2013/01/02-svg-minutes.html#item02
+#   * http://www.w3.org/2014/03/04-svg-minutes.html#item01
+#
+# The == Teleconferences == section
+# ---------------------------------
+#
+# This section lists links to minutes from teleconferences.  Each link
+# must be a bulleted list item with the link text set to "Minutes YYYY-DD-MM",
+# where YYYY-MM-DD is the date the teleconference was held.
+#
+# Example:
+#
+#   == Teleconferences ==
+#
+#   * [http://www.w3.org/2014/08/14-svg-minutes.html Minutes 2014-08-14]
+#   * [http://www.w3.org/2014/08/07-svg-minutes.html Minutes 2014-08-07]
+#
+# The == Meetings == section
+# --------------------------
+#
+# This section lists links to minutes for F2F meetings.  Each F2F is
+# a sub-section whose title is a link to the wiki page for the F2F.
+# Each link must be a bulleted list item with the link text set to
+# "Minutes YYYY-MM-DD (day n)" where YYYY-MM-DD is the dates of the
+# day's meeting and n is the day number of the meeting.
+#
+# Example:
+#
+#   == Meetings ==
+#
+#   === [[F2F/Leipzig 2014]] ===
+#
+#   * [http://www.w3.org/2014/04/07-svg-minutes.html Minutes 2014-04-07 (day 1)]
+#   * [http://www.w3.org/2014/04/08-svg-minutes.html Minutes 2014-04-08 (day 2)]
+#   * [http://www.w3.org/2014/04/09-svg-minutes.html Minutes 2014-04-09 (day 3)]
+
 use strict;
 
-if (@ARGV == 0) {
-  print <<EOF;
-usage: $0 ACCOUNT
+my $HOME = $ENV{HOME};
+die "\$HOME is not set" unless defined $HOME;
+die "\$HOME is not a directory" unless -d $HOME;
 
-ACCOUNT
-  Name of a file containing the username and the password, on two lines,
-  of the http://www.w3.org/Graphics/SVG/WG/wiki/ account to use.
-EOF
-  exit 1;
+my $dir = "$HOME/.topic-updater";
+unless (-d $dir) {
+  mkdir $dir or die "couldn't create $dir";
 }
 
-my $accountfn = $ARGV[0];
-open FH, $accountfn;
+die "could not read $dir/account" unless -f "$dir/account";
+
+open FH, "$dir/account" or die "could not read ~/.topic-updater/account";
 my $username = <FH>;
 my $password = <FH>;
 chomp $username;
 chomp $password;
 close FH;
 
-die unless defined($username) && defined($password);
+die "error parsing ~/.topic-updater/account" unless defined($username) && defined($password);
 
 my %topics = ();
 my %telcons = ();
@@ -53,7 +125,7 @@ while (<DB>) {
       $mode = 'telcons';
       next;
     } elsif (/^==/) {
-      die "unexpected input line '$_'";
+      die "unexpected input line '$_' in mode $mode";
     } else {
       if (defined $topic) {
         $topics{$topic}{description} .= "$_\n";
@@ -73,7 +145,7 @@ while (<DB>) {
     } elsif ($_ eq '== Meetings ==') {
       $mode = 'meetings';
     } else {
-      die "unexpected input line '$_'";
+      die "unexpected input line '$_' in mode $mode";
     }
   } elsif ($mode eq 'meetings') {
     if (/^=== \[\[F2F\/([^]]+)\]\] ===$/) {
@@ -91,13 +163,13 @@ while (<DB>) {
         $links{$link} = "$meeting minutes, day $day ($date)";
       }
     } else {
-      die "unexpected input line '$_'";
+      die "unexpected input line '$_' in mode $mode";
     }
   }
 }
 close DB;
 
-open FH, '>page.txt';
+open FH, ">$dir/page" or die "could not write to $dir/page";
 print FH <<EOF;
 ''Note that this page is automatically generated from [[Topic database]].  Any manual changes to this page are likely to be lost!''
 
@@ -130,16 +202,26 @@ for (sort keys %topics) {
 
 close FH;
 
-system('cmp -s page.txt lastpage.txt');
+system('cmp -s page lastpage');
 exit 0 if ($? >> 8) == 0;
 
 # Step 0: Get the login page.
 
-system '>cookies.txt';
+system ">$dir/cookies";
 
-my $loginPage = `curl -s -c cookies.txt https://www.w3.org/Graphics/SVG/WG/wiki/index.php?title=Special:UserLogin&returnto=Main+Page`;
-die unless $loginPage =~ /name="wpLoginToken" value="([0-9a-f]+)"/;
+sub read_cmd {
+  my $fh;
+  local $/;
+  open $fh, '-|', @_;
+  my $contents = <$fh>;
+  close $fh;
+  return $contents;
+}
 
+my $loginPage = read_cmd('curl', '-s',
+                         '-c', "$dir/cookies",
+                         'https://www.w3.org/Graphics/SVG/WG/wiki/index.php?title=Special:UserLogin&returnto=Main+Page');
+die 'could not extract wpLoginToken from login page' unless $loginPage =~ /name="wpLoginToken" value="([0-9a-f]+)"/;
 my $wpLoginToken = $1;
 
 # Step 1: Log in to the wiki.
@@ -151,21 +233,27 @@ my $wpDomain = 'W3C+Accounts';
 my $wpRemember = '1';
 my $wpLoginattempt = 'Log+in';
 
-system("curl -s -b cookies.txt -c cookies.txt -H 'Referer: https://www.w3.org/Graphics/SVG/WG/wiki/index.php?title=Special:UserLogin&returnto=&returntoquery=&fromhttp=1' --data 'wpName=$wpName\&wpPassword=$wpPassword\&wpDomain=$wpDomain\&wpRemember=$wpRemember\&wpLoginattempt=$wpLoginattempt&wpLoginToken=$wpLoginToken' '$action'");
-die "login failed" unless (system('grep -q wikidb_svg_UserID cookies.txt') >> 8 == 0);
+system('curl', '-s', '-b', "$dir/cookies", '-c', "$dir/cookies", '-H',
+       'Referer: https://www.w3.org/Graphics/SVG/WG/wiki/index.php?title=Special:UserLogin&returnto=&returntoquery=&fromhttp=1',
+       '--data', 'wpName=$wpName&wpPassword=$wpPassword&wpDomain=$wpDomain&wpRemember=$wpRemember&wpLoginattempt=$wpLoginattempt&wpLoginToken=$wpLoginToken',
+       "$action");
+die 'submitting login form did not result in us being logged in' unless (system("grep -q wikidb_svg_UserID $dir/cookies") >> 8 == 0);
 
 # Step 2: Get the edit page.
 
-my $editPage = `curl -s -b cookies.txt -c cookies.txt 'https://www.w3.org/Graphics/SVG/WG/wiki/index.php?title=Topics&action=edit'`;
-die unless $editPage =~ /value="([^"]+)" name="wpEditToken"/;
+my $editPage = read_cmd('curl', '-s',
+                        '-b', "$dir/cookies",
+                        '-c', "$dir/cookies",
+                        'https://www.w3.org/Graphics/SVG/WG/wiki/index.php?title=Topics&action=edit');
+die 'could not extract wpEditToken from edit page' unless $editPage =~ /value="([^"]+)" name="wpEditToken"/;
 my $wpEditToken = $1;
-die unless $editPage =~ /value="([^"]+)" name="wpAutoSummary"/;
+die 'could not extract wpAutoSummary from edit page' unless $editPage =~ /value="([^"]+)" name="wpAutoSummary"/;
 my $wpAutoSummary = $1;
-die unless $editPage =~ /value="(\d*)" name="wpStarttime"/;
+die 'could not extract wpStarttime from edit page' unless $editPage =~ /value="(\d*)" name="wpStarttime"/;
 my $wpStarttime = $1;
-die unless $editPage =~ /value="(\d*)" name="wpEdittime"/;
+die 'could not extract wpEdittime from edit page' unless $editPage =~ /value="(\d*)" name="wpEdittime"/;
 my $wpEdittime = $1;
-die unless $editPage =~ /value="([^"]*)" name="oldid"/;
+die 'could not extract oldid from edit page' unless $editPage =~ /value="([^"]*)" name="oldid"/;
 my $oldid = $1;
 
 # Step 3: Post the new page content.
@@ -181,7 +269,24 @@ my $wpTextbox1 = 'The content of the page.';
 my $wpSummary = 'Automatically generated from [[Topic database]]';
 my $wpSave = 'Save page';
 
-system("curl -s -b cookies.txt -c cookies.txt -H 'Referer: $referer' -F 'wpAntispam=' -F 'wpSection=$wpSection' -F 'wpStarttime=$wpStarttime' -F 'wpEdittime=$wpEdittime' -F 'wpScrolltop=$wpScrolltop' -F 'wpAutoSummary=$wpAutoSummary' -F 'oldid=$oldid' -F 'format=$format' -F 'model=$model' -F 'wpTextbox1=<page.txt' -F 'wpSummary=$wpSummary' -F 'wpSave=$wpSave' -F 'wpEditToken=$wpEditToken' '$action'");
-die "Updating page failed" unless ($? >> 8 == 0);
+system('curl', '-s',
+       '-b', "$dir/cookies",
+       '-c', "$dir/cookies",
+       '-H', "Referer: $referer",
+       '-F', 'wpAntispam=',
+       '-F', "wpSection=$wpSection",
+       '-F', "wpStarttime=$wpStarttime",
+       '-F', "wpEdittime=$wpEdittime",
+       '-F', "wpScrolltop=$wpScrolltop",
+       '-F', "wpAutoSummary=$wpAutoSummary",
+       '-F', "oldid=$oldid",
+       '-F', "format=$format",
+       '-F', "model=$model",
+       '-F', "wpTextbox1=<$dir/page",
+       '-F', "wpSummary=$wpSummary",
+       '-F', "wpSave=$wpSave",
+       '-F', "wpEditToken=$wpEditToken",
+       $action);
+die "updating page failed" unless ($? >> 8 == 0);
 
-system('cp page.txt lastpage.txt');
+system('mv', "$dir/page", "$dir/lastpage");
