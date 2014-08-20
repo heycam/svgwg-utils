@@ -249,7 +249,6 @@ my $wpSection = '';
 my $wpScrolltop = '0';
 my $format = 'text/x-wiki';
 my $model = 'wikitext';
-my $wpTextbox1 = 'The content of the page.';
 my $wpSummary = 'Automatically generated from [[Topic database]]';
 my $wpSave = 'Save page';
 
