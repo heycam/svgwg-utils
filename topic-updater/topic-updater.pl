@@ -8,7 +8,7 @@
 # Configuration
 # =============
 #
-# Create a file named ~/.topic-updater/account that has your W3C account
+# Create a file named ~/.svgwg-utils/account that has your W3C account
 # username on the first line and the password on the second line.  This
 # account will be used to log in to and edit the wiki.
 #
@@ -16,18 +16,19 @@
 # ============================
 #
 # The source wiki text of the [[Topic database]] page must be formatted
-# as follows.  There are three top-level sections that must be present:
-# the "Topics" section, the "Teleconferences" section and the "Meetings"
-# section.  The sections must occur in this order.
+# as follows.  There are two top-level sections that must be present:
+# the "Topics" section and the "Meetings" section.  The sections must occur in
+# this order.
 #
 # The == Topics == section
 # ------------------------
 #
 # This section lists the topics that links to meeting minute discussions
 # will be sorted under.  Each topic is a sub-section that consists of
-# a short description of the topic followed by a bulleted list item for
-# each link to a teleconference of F2F meeting minutes page where that
-# topic was discussed.
+# a short description of the topic.  It is not necessary to have a
+# topic defined in this section; an entry in the Meetings section below
+# can name a topic without it being defined here -- it will just have
+# no description on [[Topics]].
 #
 # Example:
 #
@@ -37,41 +38,38 @@
 #
 #   Discussions about replacing xlink:href with href or src attributes.
 #
-#   * http://www.w3.org/2013/01/02-svg-minutes.html#item02
-#   * http://www.w3.org/2014/03/04-svg-minutes.html#item01
-#
-# The == Teleconferences == section
-# ---------------------------------
-#
-# This section lists links to minutes from teleconferences.  Each link
-# must be a bulleted list item with the link text set to "Minutes YYYY-DD-MM",
-# where YYYY-MM-DD is the date the teleconference was held.
-#
-# Example:
-#
-#   == Teleconferences ==
-#
-#   * [http://www.w3.org/2014/08/14-svg-minutes.html Minutes 2014-08-14]
-#   * [http://www.w3.org/2014/08/07-svg-minutes.html Minutes 2014-08-07]
-#
 # The == Meetings == section
 # --------------------------
 #
-# This section lists links to minutes for F2F meetings.  Each F2F is
-# a sub-section whose title is a link to the wiki page for the F2F.
-# Each link must be a bulleted list item with the link text set to
-# "Minutes YYYY-MM-DD (day n)" where YYYY-MM-DD is the dates of the
-# day's meeting and n is the day number of the meeting.
+# This section lists links to minutes from teleconferences and F2F meetings.
+# The contents of this section is a bulleted list of up to three levels:
+#
+#   * The top level lists the meeting date, an optional name, and a link to
+#     the minutes as published by RRSAgent.  The format of the bullet must
+#     be "* YYYY-MM-DD: http://www.w3.org/YYYY/MM/DD-svg-minutes.html" with
+#     the optional name appearing just before the colon.
+#
+#   * The second level lists the topics that appear in the minutes.  The
+#     format of this line is "** n. Topic name" where "n" is the agenda order
+#     number as it appears in the minutes.  The number can be left off if
+#     the minutes being linked to aren't RRSAgent-generated.
+#
+#   * The third level lists resolutions that were made during the discussion
+#     of the topic.  The format of this line is "*** RESOLUTION: Text of the
+#     resolution".
 #
 # Example:
 #
 #   == Meetings ==
 #
-#   === [[F2F/Leipzig 2014]] ===
-#
-#   * [http://www.w3.org/2014/04/07-svg-minutes.html Minutes 2014-04-07 (day 1)]
-#   * [http://www.w3.org/2014/04/08-svg-minutes.html Minutes 2014-04-08 (day 2)]
-#   * [http://www.w3.org/2014/04/09-svg-minutes.html Minutes 2014-04-09 (day 3)]
+#   * 2014-08-14: http://www.w3.org/2014/08/14-svg-minutes.html
+#   ** 1. Charter
+#   ** 2. paint-order
+#   ** 3. F2F planning
+#   *** RESOLUTION: We will meet at Cam's house.
+#   * 2014-04-09 [[F2F/Leipzig 2014]] day 3: http://www.w3.org/2014/04/09-svg-minutes.html
+#   ** 1. SVG sizing
+#   ** 2. Lunch plans
 
 use strict;
 
@@ -79,31 +77,30 @@ my $HOME = $ENV{HOME};
 die "\$HOME is not set" unless defined $HOME;
 die "\$HOME is not a directory" unless -d $HOME;
 
-my $dir = "$HOME/.topic-updater";
+my $dir = "$HOME/.svgwg-utils";
 unless (-d $dir) {
   mkdir $dir or die "couldn't create $dir";
 }
 
 die "could not read $dir/account" unless -f "$dir/account";
 
-open FH, "$dir/account" or die "could not read ~/.topic-updater/account";
+open FH, "$dir/account" or die "could not read ~/.svgwg-utils/account";
 my $username = <FH>;
 my $password = <FH>;
 chomp $username;
 chomp $password;
 close FH;
 
-die "error parsing ~/.topic-updater/account" unless defined($username) && defined($password);
+die "error parsing ~/.svgwg-utils/account" unless defined($username) && defined($password);
 
 my %topics = ();
-my %telcons = ();
-my %meetings = ();
-my %links = ();
+my %minutes = ();
+my $lastMinutes;
+my $lastTopic;
 
 # Step -1: Get the contents of the [[Topic database]] page.
 
 my $mode = 'looking-for-topics';
-my $topic;
 my $meeting;
 
 open DB, "curl -s 'https://www.w3.org/Graphics/SVG/WG/wiki/index.php?title=Topic_database&action=raw' |";
@@ -116,52 +113,45 @@ while (<DB>) {
     }
   } elsif ($mode eq 'topics') {
     if (/^=== (.*) ===$/) {
-      $topic = $1;
-      $topics{$topic} = { description => '', links => [] };
-    } elsif (/^\* (.*)/) {
-      my $link = $1;
-      push(@{$topics{$topic}{links}}, $link);
-    } elsif ($_ eq '== Teleconferences ==') {
-      $mode = 'telcons';
+      $lastTopic = $1;
+      $topics{$lastTopic} = { title => $lastTopic, description => '', entries => [] };
+    } elsif ($_ eq '== Meetings ==') {
+      $mode = 'meetings';
       next;
     } elsif (/^==/) {
       die "unexpected input line '$_' in mode $mode";
     } else {
-      if (defined $topic) {
-        $topics{$topic}{description} .= "$_\n";
+      if (defined $lastTopic) {
+        $topics{$lastTopic}{description} .= "$_\n";
       }
-    }
-  } elsif ($mode eq 'telcons') {
-    if (/^\* \[([^ ]+) Minutes ([0-9-]+)\]/) {
-      my $link = $1;
-      my $date = $2;
-      $telcons{$date} = $link;
-      if ($link =~ /^(.*)#(.*)/) {
-        $links{$1} = "Minutes $date";
-      } else {
-        $links{$link} = "Minutes $date";
-      }
-    } elsif (/^\s*$/) {
-    } elsif ($_ eq '== Meetings ==') {
-      $mode = 'meetings';
-    } else {
-      die "unexpected input line '$_' in mode $mode";
     }
   } elsif ($mode eq 'meetings') {
-    if (/^=== \[\[F2F\/([^]]+)\]\] ===$/) {
-      $meeting = $1;
-      $meetings{$meeting} = { name => $meeting, days => { } };
-    } elsif (/^\s*$/) {
-    } elsif (/^\* \[([^ ]+) Minutes ([0-9-]+) \(day (\d+)\)\]$/) {
-      my $link = $1;
-      my $date = $2;
-      my $day = $3;
-      $meetings{$meeting}{days}{$day} = $1;
-      if ($link =~ /^(.*)#(.*)/) {
-        $links{$1} = "$meeting minutes, day $day ($date)";
+    if (/^\* ([0-9-]+)\s*(.*): (.+)$/) {
+      my $date = $1;
+      my $title = $2;
+      my $link = $3;
+      $title = 'Teleconference' unless $title ne '';
+      $lastMinutes = $link;
+      $minutes{$link} = { title => $title, date => $date, topics => [] };
+    } elsif (/^\*\* (?:(\d+)\. )(.*)/) {
+      my $index = $1;
+      my @topicNames = split(/\s*;\s*/, $2);
+      $lastTopic = { minutes => $lastMinutes, index => $index, topicNames => [@topicNames], resolutions => [] };
+      if (defined $index) {
+        $lastTopic->{link} = "$lastMinutes#item" . sprintf('%02d', $index);
+        $lastTopic->{index} = $index;
       } else {
-        $links{$link} = "$meeting minutes, day $day ($date)";
+        $lastTopic->{link} = $lastMinutes;
+        $lastTopic->{index} = -1;
       }
+      push(@{$minutes{$lastMinutes}{topics}}, $lastTopic);
+      for (@topicNames) {
+        $topics{$_} = { title => $_, description => '', entries => [] } unless defined $topics{$_};
+        push(@{$topics{$_}{entries}}, $lastTopic);
+      }
+    } elsif (/^\*\*\* RESOLUTION: (.*)/) {
+      push(@{$lastTopic->{resolutions}}, $1);
+    } elsif (/^\s*$/) {
     } else {
       die "unexpected input line '$_' in mode $mode";
     }
@@ -176,28 +166,22 @@ print FH <<EOF;
 EOF
 
 for (sort keys %topics) {
-  print FH "== $_ ==\n\n";
-  my $desc = $topics{$_}{description};
+  my $topic = $topics{$_};
+  print FH "== $topic->{title} ==\n\n";
+  my $desc = $topic->{description};
   $desc =~ s/^\n+//;
   $desc =~ s/\n+$//;
-  print FH "$desc\n\n";
-  for my $link (@{$topics{$_}{links}}) {
-    my $linkName;
-    if ($link =~ /^(.*)#(.*)/) {
-      if (defined $links{$1}) {
-        $linkName = $links{$1};
-      }
-    } else {
-      if (defined $links{$link}) {
-        $linkName = $links{$link};
-      }
-    }
-    if (defined $linkName) {
-      print FH "* [$link $linkName]\n";
-    } else {
-      print FH "* $link\n";
+  if ($desc ne '') {
+    print FH "$desc\n\n";
+  }
+  for my $entry (sort { $minutes{$b->{minutes}}{date} cmp $minutes{$a->{minutes}}{date} } @{$topics{$_}{entries}}) {
+    my $linkName = "$minutes{$entry->{minutes}}{title} ($minutes{$entry->{minutes}}{date})";
+    print FH "* [$entry->{link} $linkName]\n";
+    for my $res (@{$entry->{resolutions}}) {
+      print FH "** RESOLUTION: $res\n";
     }
   }
+  print FH "\n";
 }
 
 close FH;
@@ -235,7 +219,7 @@ my $wpLoginattempt = 'Log+in';
 
 system('curl', '-s', '-b', "$dir/cookies", '-c', "$dir/cookies", '-H',
        'Referer: https://www.w3.org/Graphics/SVG/WG/wiki/index.php?title=Special:UserLogin&returnto=&returntoquery=&fromhttp=1',
-       '--data', 'wpName=$wpName&wpPassword=$wpPassword&wpDomain=$wpDomain&wpRemember=$wpRemember&wpLoginattempt=$wpLoginattempt&wpLoginToken=$wpLoginToken',
+       '--data', "wpName=$wpName&wpPassword=$wpPassword&wpDomain=$wpDomain&wpRemember=$wpRemember&wpLoginattempt=$wpLoginattempt&wpLoginToken=$wpLoginToken",
        "$action");
 die 'submitting login form did not result in us being logged in' unless (system("grep -q wikidb_svg_UserID $dir/cookies") >> 8 == 0);
 
