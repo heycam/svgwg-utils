@@ -15,10 +15,33 @@ use strict;
 # username on the first line and the password on the second line.  This
 # account will be used to log in to and edit the wiki.
 
-die "usage: $0 URL YYYY-MM-DD\n" unless @ARGV == 2;
+sub usage {
+  die "usage: $0 URL YYYY-MM-DD\n       $0 --scan-input\n";
+}
 
-my $url = $ARGV[0];
-my $date = $ARGV[1];
+my $url;
+my $date;
+
+if (@ARGV == 1) {
+  usage() unless $ARGV[0] eq '--scan-input';
+
+  while (<STDIN>) {
+    if (m{http://www\.w3\.org/(\d\d\d\d)/(\d\d)/(\d\d)-svg-minutes\.html}) {
+      $url = $&;
+      $date = "$1-$2-$3";
+      print "$url\n$date\n";
+      exit 0;
+      last;
+    }
+  }
+
+  exit 0 unless defined $url;
+} elsif (@ARGV == 2) {
+  $url = $ARGV[0];
+  $date = $ARGV[1];
+} else {
+  usage();
+}
 
 die "date has wrong format\n" unless $date =~ /^\d\d\d\d-\d\d-\d\d$/;
 
