@@ -95,9 +95,13 @@ exit 0 if $db =~ /^== Meetings ==.*^\* $date/ms;
 # Step 3: Read the minutes URL and parse out the topics and resolutions.
 
 my $minutesPage = read_cmd('curl', '-s', $url);
+
+# Make it easier to split out sections between <h3>s.
+$minutesPage .= '<h3';
+
 my $wikitext = "* $date: $url\n";
 
-while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)(?:<h3)?/<h3/s) {
+while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)<h3/<h3/s) {
   my $index = int($1);
   my $topic = $2;
   my $contents = $3;
@@ -106,7 +110,7 @@ while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)(?:<h3)?/<h3/s
   $topic =~ s/\s\s+/ /g;
   $wikitext .= "** $index. $topic\n";
 
-  while ($contents =~ s/<strong class="resolution">(RESOLUTION:.*?)<\/strong>//s) {
+  while ($contents =~ s/<strong class=['"]resolution['"]>(RESOLUTION:.*?)<\/strong>//s) {
     my $res = $1;
     $res =~ s/^\s+//;
     $res =~ s/\s+$//;
