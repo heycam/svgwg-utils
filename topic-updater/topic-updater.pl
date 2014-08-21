@@ -205,7 +205,7 @@ sub read_cmd {
 my $loginPage = read_cmd('curl', '-s',
                          '-c', "$dir/cookies",
                          'https://www.w3.org/Graphics/SVG/WG/wiki/index.php?title=Special:UserLogin&returnto=Main+Page');
-die 'could not extract wpLoginToken from login page' unless $loginPage =~ /name="wpLoginToken" value="([0-9a-f]+)"/;
+die "could not extract wpLoginToken from login page, which was:\n\n$loginPage\n" unless $loginPage =~ /name="wpLoginToken" value="([0-9a-f]+)"/;
 my $wpLoginToken = $1;
 
 # Step 1: Log in to the wiki.
