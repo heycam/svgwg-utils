@@ -135,7 +135,7 @@ while (<DB>) {
       $minutes{$link} = { title => $title, date => $date, topics => [] };
     } elsif (/^\*\* (?:(\d+)\. )(.*)/) {
       my $index = $1;
-      my @topicNames = split(/\s*;\s*/, $2);
+      my @topicNames = split(/\s\|\s/, $2);
       $lastTopic = { minutes => $lastMinutes, index => $index, topicNames => [@topicNames], resolutions => [] };
       if (defined $index) {
         $lastTopic->{link} = "$lastMinutes#item" . sprintf('%02d', $index);
