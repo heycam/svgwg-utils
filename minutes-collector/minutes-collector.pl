@@ -29,8 +29,6 @@ if (@ARGV == 1) {
     if (m{http://www\.w3\.org/(\d\d\d\d)/(\d\d)/(\d\d)-svg-minutes\.html}) {
       $url = $&;
       $date = "$1-$2-$3";
-      print "$url\n$date\n";
-      exit 0;
       last;
     }
   }
