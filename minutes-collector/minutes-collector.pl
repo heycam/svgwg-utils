@@ -97,7 +97,7 @@ exit 0 if $db =~ /^== Meetings ==.*^\* $date/ms;
 my $minutesPage = read_cmd('curl', '-s', $url);
 my $wikitext = "* $date: $url\n";
 
-while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)<h3/<h3/s) {
+while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)(?:<h3)?/<h3/s) {
   my $index = int($1);
   my $topic = $2;
   my $contents = $3;
