@@ -54,9 +54,16 @@
 #     number as it appears in the minutes.  The number can be left off if
 #     the minutes being linked to aren't RRSAgent-generated.
 #
-#   * The third level lists resolutions that were made during the discussion
-#     of the topic.  The format of this line is "*** RESOLUTION: Text of the
-#     resolution".
+#   * The third level lists:
+#       - resolutions that were made during the discussion of the topic,
+#         where the format of this line is "*** RESOLUTION: Text of the
+#         resolution".
+#       - actions that were created, where the format of this line is
+#         "*** [http://www.w3.org/Graphics/SVG/WG/track/actions/nnnn
+#         ACTION-nnnn]: Text of the action (on Person Name)"
+#       - issues that were created, where the format of this line is
+#         "*** [http://www.w3.org/Graphics/SVG/WG/track/issues/nnnn
+#         ISSUE-nnnn]: Text of the issue"
 #
 # Example:
 #
@@ -67,6 +74,8 @@
 #   ** 2. paint-order
 #   ** 3. F2F planning
 #   *** RESOLUTION: We will meet at Cam's house.
+#   *** [http://www.w3.org/Graphics/SVG/WG/actions/1234 ACTION-1234] Look into catering options (on Cameron McCormack)
+#   *** [http://www.w3.org/Graphics/SVG/WG/issues/1234 ISSUE-1234] There is a problem
 #   * 2014-04-09 [[F2F/Leipzig 2014]] day 3: http://www.w3.org/2014/04/09-svg-minutes.html
 #   ** 1. SVG sizing
 #   ** 2. Lunch plans
@@ -136,7 +145,7 @@ while (<DB>) {
     } elsif (/^\*\* (?:(\d+)\. )(.*)/) {
       my $index = $1;
       my @topicNames = split(/\s\|\s/, $2);
-      $lastTopic = { minutes => $lastMinutes, index => $index, topicNames => [@topicNames], resolutions => [] };
+      $lastTopic = { minutes => $lastMinutes, index => $index, topicNames => [@topicNames], resolutions => [], actions => [], issues => [] };
       if (defined $index) {
         $lastTopic->{link} = "$lastMinutes#item" . sprintf('%02d', $index);
         $lastTopic->{index} = $index;
@@ -151,6 +160,10 @@ while (<DB>) {
       }
     } elsif (/^\*\*\* RESOLUTION: (.*)/) {
       push(@{$lastTopic->{resolutions}}, $1);
+    } elsif (/^\*\*\* \[[^ ]* ACTION-(\d+)\] - (.*) \(on (.*)\)/) {
+      push(@{$lastTopic->{actions}}, { id => $1, desc => $2, who => $3 });
+    } elsif (/^\*\*\* \[[^ ]* ISSUE-(\d+)\] - (.*)/) {
+      push(@{$lastTopic->{issues}}, { id => $1, desc => $2 });
     } elsif (/^\s*$/) {
     } else {
       die "unexpected input line '$_' in mode $mode";
@@ -177,6 +190,12 @@ for (sort keys %topics) {
   for my $entry (sort { $minutes{$b->{minutes}}{date} cmp $minutes{$a->{minutes}}{date} } @{$topics{$_}{entries}}) {
     my $linkName = "$minutes{$entry->{minutes}}{title} ($minutes{$entry->{minutes}}{date})";
     print FH "* [$entry->{link} $linkName]\n";
+    for my $issue (@{$entry->{issues}}) {
+      print FH "** [http://www.w3.org/Graphics/SVG/WG/track/actions/$issue->{id} ISSUE-$issue->{id}] - $issue->{desc}\n";
+    }
+    for my $action (@{$entry->{actions}}) {
+      print FH "** [http://www.w3.org/Graphics/SVG/WG/track/actions/$action->{id} ACTION-$action->{id}] - $action->{desc} (on $action->{who})\n";
+    }
     for my $res (@{$entry->{resolutions}}) {
       print FH "** RESOLUTION: $res\n";
     }

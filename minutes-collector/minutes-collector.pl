@@ -110,12 +110,33 @@ while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)<h3/<h3/s) {
   $topic =~ s/\s\s+/ /g;
   $wikitext .= "** $index. $topic\n";
 
+  $contents =~ s/\s\s+/ /g;
+
   while ($contents =~ s/<strong class=['"]resolution['"]>(RESOLUTION:.*?)<\/strong>//s) {
     my $res = $1;
     $res =~ s/^\s+//;
     $res =~ s/\s+$//;
     $res =~ s/\s\s+/ /g;
     $wikitext .= "*** $res\n";
+  }
+
+  while ($contents =~ s/Created ACTION-(\d+) - (.*?) \[on (.*?) -//) {
+    my $id = $1;
+    my $desc = $2;
+    my $who = $3;
+    $desc =~ s/^\s+//;
+    $desc =~ s/\s+$//;
+    $desc =~ s/\s\s+/ /g;
+    $wikitext .= "*** [http://www.w3.org/Graphics/SVG/WG/track/actions/$id ACTION-$id] - $desc (on $who)\n";
+  }
+
+  while ($contents =~ s/Created ISSUE-(\d+) - (.*?) Please complete additional details//) {
+    my $id = $1;
+    my $desc = $2;
+    $desc =~ s/^\s+//;
+    $desc =~ s/\s+$//;
+    $desc =~ s/\s\s+/ /g;
+    $wikitext .= "*** [http://www.w3.org/Graphics/SVG/WG/track/issues/$id ISSUE-$id] - $desc\n";
   }
 }
 
