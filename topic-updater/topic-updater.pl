@@ -188,8 +188,13 @@ for (sort keys %topics) {
     print FH "$desc\n\n";
   }
   for my $entry (sort { $minutes{$b->{minutes}}{date} cmp $minutes{$a->{minutes}}{date} } @{$topics{$_}{entries}}) {
-    my $linkName = "$minutes{$entry->{minutes}}{title} ($minutes{$entry->{minutes}}{date})";
-    print FH "* [$entry->{link} $linkName]\n";
+    my $title = $minutes{$entry->{minutes}}{title};
+    my $preText = '';
+    if ($title =~ s/^(\[\[.*?\]\] )//) {
+      $preText = $1;
+  }
+    my $linkName = "$title ($minutes{$entry->{minutes}}{date})";
+    print FH "* $preText\[$entry->{link} $linkName]\n";
     for my $issue (@{$entry->{issues}}) {
       print FH "** [http://www.w3.org/Graphics/SVG/WG/track/actions/$issue->{id} ISSUE-$issue->{id}] - $issue->{desc}\n";
     }
