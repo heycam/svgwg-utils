@@ -110,9 +110,9 @@ while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)<h3/<h3/s) {
   $topic =~ s/\s\s+/ /g;
   $wikitext .= "** $index. $topic\n";
 
-  $contents =~ s/\s\s+/ /g;
+  $contents =~ s/\s+/ /g;
 
-  while ($contents =~ s/<strong class=['"]resolution['"]>(RESOLUTION:.*?)<\/strong>//s) {
+  while ($contents =~ s/<strong class=['"]resolution['"]>(RESOLUTION:.*?)<\/strong>//) {
     my $res = $1;
     $res =~ s/^\s+//;
     $res =~ s/\s+$//;
