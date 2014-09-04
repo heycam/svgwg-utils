@@ -192,7 +192,7 @@ for (sort keys %topics) {
     my $preText = '';
     if ($title =~ s/^(\[\[.*?\]\] )//) {
       $preText = $1;
-  }
+    }
     my $linkName = "$title ($minutes{$entry->{minutes}}{date})";
     print FH "* $preText\[$entry->{link} $linkName]\n";
     for my $issue (@{$entry->{issues}}) {
