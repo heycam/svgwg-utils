@@ -162,9 +162,6 @@ for my $line (split /\n/, $after) {
 
 $newdb .= $wikitext unless $inserted;
 
-print $newdb;
-exit 0;
-
 open FH, ">$dir/page";
 print FH $newdb;
 close FH;
