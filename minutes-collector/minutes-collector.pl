@@ -117,6 +117,7 @@ while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)<h3/<h3/s) {
     $res =~ s/^\s+//;
     $res =~ s/\s+$//;
     $res =~ s/\s\s+/ /g;
+    $res =~ s/<a.*?>(.*?)<\/a>/$1/g;
     $wikitext .= "*** $res\n";
   }
 
@@ -127,6 +128,7 @@ while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)<h3/<h3/s) {
     $desc =~ s/^\s+//;
     $desc =~ s/\s+$//;
     $desc =~ s/\s\s+/ /g;
+    $desc =~ s/<a.*?>(.*?)<\/a>/$1/g;
     $wikitext .= "*** [http://www.w3.org/Graphics/SVG/WG/track/actions/$id ACTION-$id] - $desc (on $who)\n";
   }
 
@@ -136,6 +138,7 @@ while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)<h3/<h3/s) {
     $desc =~ s/^\s+//;
     $desc =~ s/\s+$//;
     $desc =~ s/\s\s+/ /g;
+    $desc =~ s/<a.*?>(.*?)<\/a>/$1/g;
     $wikitext .= "*** [http://www.w3.org/Graphics/SVG/WG/track/issues/$id ISSUE-$id] - $desc\n";
   }
 }
