@@ -144,7 +144,26 @@ while ($minutesPage =~ s/^.*?<h3 id="item0*(\d+)">(.*?)<\/h3>(.*?)<h3/<h3/s) {
 }
 
 $db =~ /(.*^== Meetings ==)\n+(.*)/ms;
-my $newdb = "$1\n\n$wikitext$2";
+
+my $newdb = "$1\n\n";
+my $after = $2;
+my $inserted = 0;
+
+for my $line (split /\n/, $after) {
+  if (!$inserted && $line =~ /^\* (\d\d\d\d-\d\d-\d\d)/) {
+    my $lineDate = $1;
+    if ($date gt $lineDate) {
+      $newdb .= $wikitext;
+      $inserted = 1;
+    }
+  }
+  $newdb .= "$line\n";
+}
+
+$newdb .= $wikitext unless $inserted;
+
+print $newdb;
+exit 0;
 
 open FH, ">$dir/page";
 print FH $newdb;
