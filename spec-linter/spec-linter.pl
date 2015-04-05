@@ -13,6 +13,8 @@
 
 use strict;
 
+use Date::Parse;
+
 my $HOME = $ENV{HOME};
 die "\$HOME is not set" unless defined $HOME;
 die "\$HOME is not a directory" unless -d $HOME;
@@ -53,6 +55,8 @@ mkdir "$dir/.linter-state" unless -d "$dir/.linter-state";
 
 my @errors = ();
 
+# first we run xmlwf; if there were no errors, we check links
+
 for (@files) {
   my $file = $_;
   unless (-f "$dir/.linter-repo/svgwg/$file") {
@@ -60,6 +64,255 @@ for (@files) {
     next;
   }
   push @errors, split(/\n/, `cd $dir/.linter-repo/svgwg && xmlwf $file`);
+}
+
+my %spec_dirs = ();
+
+unless (@errors) {
+  for (@files) {
+    my $dir = `dirname \$(dirname $_)`;
+    chomp $dir;
+    $spec_dirs{$dir} = 1;
+  }
+}
+
+mkdir "$dir/.linter-cache" unless -d "$dir/.linter-cache";
+
+my @links = ();
+for my $spec_dir (sort keys %spec_dirs) {
+  for (split(/\n/, `cd $dir/.linter-repo/svgwg/$spec_dir && make list-external-links`)) {
+    my ($file, $line, $col, $href) = /^([^:]+):(\d+):(\d+):(.*)/;
+    my $dir = $spec_dir eq '.' ? 'master' : "$spec_dir/master";
+    while ($file =~ /^\.\.\//) {
+      if ($dir =~ s/\/[^\/]+$//) {
+        $file =~ s/^\.\.\///;
+      } elsif ($dir eq '') {
+        last;
+      } else {
+        $file =~ s/^\.\.\///;
+        $dir = '';
+      }
+    }
+    $file = $dir eq '' ? $file : "$dir/$file";
+    push @links, "$file:$line:$col:$href";
+  }
+}
+
+sub percent_encode {
+  my $c = shift;
+  return '%' . sprintf('%02x', ord($c));
+}
+
+sub escape_url {
+  my $s = shift;
+  $s =~ s{([^A-Za-z0-9._~:/?#@!\$&()*+,;=-])}{percent_encode($1)}ge;
+  return $s;
+}
+
+my %links_without_refs = ();
+my %links_with_refs = ();
+for (@links) {
+  my ($file, $line, $col, $href) = /^([^:]+):(\d+):(\d+):(.*)/;
+  next if $href =~ /log\.csswg\.org/;
+  $href = escape_url($href);
+  if ($href =~ /(.*)#(.*)/) {
+    $links_with_refs{$1} = { } unless exists $links_with_refs{$1};
+    $links_with_refs{$1}{$2} = { } unless exists $links_with_refs{$1}{$2};
+    $links_with_refs{$1}{$2}{"$file:$line:$col"} = 1;
+  } else {
+    $links_without_refs{$href} = { } unless exists $links_without_refs{$href};
+    $links_without_refs{$href}{"$file:$line:$col"} = 1;
+  }
+}
+
+sub escape_fn_char {
+  my $c = shift;
+  return '_' . sprintf('%02x', ord($c));
+}
+
+sub escape_fn {
+  my $s = shift;
+  $s =~ s/([^a-z0-9])/escape_fn_char($1)/ge;
+  return $s;
+}
+
+# network rules:
+#   - if we are checking for the existence of an entire document:
+#       - if we have a response cached and it is not fresh,
+#           or if we do not have a response cached, fetch and cache it
+#       - if we have a response cached and it is fresh, use the cached response
+#   - if we are checking for the existence of an ID within a document:
+#       - if we have a response cached and it is not fresh,
+#           or if we do not have a response cached, fetch and cache it
+#       - if we have a response cached and it is fresh,
+#           and if the ID is not present in the document, fetch and cache it
+#
+# always fetch using If-Modified-Since
+
+sub read_headers {
+  my $fh = shift;
+  my $status_line = <$fh>;
+  my %headers = ();
+  if ($status_line =~ /^HTTP\S+ (\d+)/) {
+    $headers{_status} = $1;
+    while (<$fh>) {
+      chomp;
+      s/\x0D$//g;
+      last if $_ eq '';
+      last unless /^([^:]+):\s*(.*)/;
+      $headers{lc $1} = $2;
+    }
+  }
+  return %headers;
+}
+
+sub curl_error {
+  my $n = shift;
+  if ($n == 3) {
+    return "bad URL";
+  } elsif ($n == 6) {
+    return "could not resolve host";
+  } elsif ($n == 7) {
+    return "could not connect to host";
+  } elsif ($n == 28) {
+    return "timeout";
+  } elsif ($n) {
+    return "curl error " . $n;
+  }
+  return undef;
+}
+
+sub fetch {
+  my $url = shift;
+  my $method = shift;
+  die unless $method eq 'HEAD' || $method eq 'GET';
+  my $options = '-s -m 15 -H "Accept: text/html,*/*;q=0.9"';
+  $options .= $method eq 'HEAD' ? ' -I' : ' -i';
+  my $cache_good_result_even_without_known_freshness = shift;
+  my $key = escape_fn($url);
+  my $filename = "$dir/.linter-cache/$method-$key";
+  my $get = !-f $filename || -z $filename;
+  my $redirects = 0;
+  my $loops = 0;
+  my $allow_unfresh = 0;
+  my $new_fragment = undef;
+  for (;;) {
+    return (undef, "too many loops") if ++$loops > 10;
+    my $got = 0;
+    if ($get) {
+      print "curl $options '$url' > $filename\n";
+      system "curl $options '$url' > $filename";
+      if ($? >> 8) {
+        return (undef, curl_error($? >> 8));
+      } elsif (-z $filename) {
+        return (undef, "no output from curl");
+      }
+      $get = 0;
+      $got = 1;
+      $allow_unfresh = 1;
+    } else {
+      $allow_unfresh = 0;
+    }
+    my $fh;
+    open $fh, $filename;
+    my %headers = read_headers($fh);
+    return (undef, "could not parse output from curl") unless defined $headers{_status};
+    my $expires;
+    my $known_fresh = 0;
+    if (!$allow_unfresh &&
+        exists $headers{expires} &&
+        defined($expires = str2time($headers{expires}))) {
+      if ($expires < time) {
+        $get = 1;
+        next;
+      }
+      $known_fresh = 1;
+    }
+    # cached good results are used
+    if (($known_fresh || $cache_good_result_even_without_known_freshness) &&
+        $headers{_status} >= 200 && $headers{_status} <= 299) {
+      local $/;
+      my $contents = <$fh>;
+      return ($headers{_status}, undef, $contents);
+    }
+    # cached bad results are not
+    if ($headers{_status} >= 300 && $headers{_status} <= 399) {
+      return (undef, 'HTTP 3xx code without Location') unless exists $headers{location};
+      return (undef, "too many redirects") if ++$redirects >= 5;
+      my $location = $headers{location};
+      $location =~ s/#(.*)//;
+      if ($location =~ /^\//) {
+        my ($host_part) = $url =~ m{^(https?://[^/]+)};
+        return (undef, "bad URL") unless defined $host_part;
+        $url = $host_part . escape_url($location);
+      } else {
+        $url = escape_url($location);
+      }
+      $get = 1;
+      next;
+    }
+    if ($got) {
+      local $/;
+      my $contents = <$fh>;
+      return ($headers{_status}, undef, $contents);
+    }
+    $get = 1;
+  }
+}
+
+sub cached_head {
+  my $url = shift;
+  return fetch($url, 'HEAD', 1);
+}
+
+sub cached_get {
+  my $url = shift;
+  return fetch($url, 'GET', 0);
+}
+
+for my $url (sort keys %links_with_refs) {
+  my ($status, $reason, $contents) = cached_get($url);
+  my $fragments = $links_with_refs{$url};
+  if (defined $status && $status >= 400 && $status <= 499) {
+    $reason = "HTTP status $status";
+  }
+  if (defined $reason) {
+    for my $fragment (keys %$fragments) {
+      my $locations = $fragments->{$fragment};
+      for (keys %$locations) {
+        push @errors, "$_:broken link $url ($reason)";
+      }
+    }
+    if (exists $links_without_refs{$url}) {
+      for (keys %{$links_without_refs{$url}}) {
+        push @errors, "$_:broken link $url ($reason)";
+      }
+    }
+    delete $links_without_refs{$url};
+    next;
+  }
+
+  for my $fragment (keys %$fragments) {
+    unless ($contents =~ /\s(?:(?i)id)=(?:$fragment|'$fragment'|"$fragment")(?:\s|>)/ ||
+            $contents =~ /<(?:[Aa])\s+[^>]*(?:(?i)name)=(?:$fragment|'$fragment'|"$fragment")/) {
+      my $locations = $fragments->{$fragment};
+      for (keys %$locations) {
+        push @errors, "$_:broken link $url (fragment $fragment not found)";
+      }
+    }
+  }
+}
+
+for my $url (sort keys %links_without_refs) {
+  my ($status, $reason) = cached_head($url);
+  if (defined $status && $status >= 400 && $status <= 499) {
+    $reason = "HTTP status $status";
+  }
+  if (defined $reason) {
+    for (keys %{$links_without_refs{$url}}) {
+      push @errors, "$_:broken link $url ($reason)";
+    }
+  }
 }
 
 my %culprits = ();
