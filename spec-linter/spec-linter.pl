@@ -346,8 +346,8 @@ if (@errors) {
         print FH "(to $_)\n";
       }
     }
-    my $issues_were = scalar @errors ? 'issue was' : 'issues were';
-    my $them = scalar @errors ? 'it' : 'them';
+    my $issues_were = scalar(@errors) == 1 ? 'issue was' : 'issues were';
+    my $them = scalar(@errors) == 1 ? 'it' : 'them';
     print FH "The following $issues_were found while linting specs in the SVG WG\n";
     print FH "repository at revision $this_rev:\n\n";
     for (@errors) {
