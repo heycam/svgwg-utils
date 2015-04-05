@@ -96,6 +96,7 @@ for my $spec_dir (sort keys %spec_dirs) {
     $file = $dir eq '' ? $file : "$dir/$file";
     push @links, "$file:$line:$col:$href";
   }
+  push @errors, split(/\n/, `cd $dir/.linter-repo/svgwg/$spec_dir && make lint`);
 }
 
 sub percent_encode {
