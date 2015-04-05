@@ -280,12 +280,12 @@ for my $url (sort keys %links_with_refs) {
     for my $fragment (keys %$fragments) {
       my $locations = $fragments->{$fragment};
       for (keys %$locations) {
-        push @errors, "$_:broken link $url ($reason)";
+        push @errors, "$_: broken link $url ($reason)";
       }
     }
     if (exists $links_without_refs{$url}) {
       for (keys %{$links_without_refs{$url}}) {
-        push @errors, "$_:broken link $url ($reason)";
+        push @errors, "$_: broken link $url ($reason)";
       }
     }
     delete $links_without_refs{$url};
@@ -297,7 +297,7 @@ for my $url (sort keys %links_with_refs) {
             $contents =~ /<(?:[Aa])\s+[^>]*(?:(?i)name)=(?:$fragment|'$fragment'|"$fragment")/) {
       my $locations = $fragments->{$fragment};
       for (keys %$locations) {
-        push @errors, "$_:broken link $url (fragment $fragment not found)";
+        push @errors, "$_: broken link $url (fragment $fragment not found)";
       }
     }
   }
@@ -310,7 +310,7 @@ for my $url (sort keys %links_without_refs) {
   }
   if (defined $reason) {
     for (keys %{$links_without_refs{$url}}) {
-      push @errors, "$_:broken link $url ($reason)";
+      push @errors, "$_: broken link $url ($reason)";
     }
   }
 }
