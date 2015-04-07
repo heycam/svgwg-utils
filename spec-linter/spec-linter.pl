@@ -366,14 +366,22 @@ if (@errors) {
   }
   close FH;
   if (%culprits) {
-    my @args = ('mail', '-r', 'SVG Working Group Apprentice <cam+svgwg-apprentice@mcc.id.au>', '-s', '[svgwg] spec issues');
-    push @args, '-c', 'cam@mcc.id.au' unless exists $culprits{'cam@mcc.id.au'};
+    my $recipients;
     if (0) {
-      push @args, 'cam@mcc.id.au';
+      $recipients = "To: cam\@mcc.id.au";
     } else {
-      push @args, sort keys %culprits;
+      $recipients = 'To: ' . join(', ', sort keys %culprits) . "";
+      $recipients .= "\nCc: cam\@mcc.id.au" unless exists $culprits{'cam@mcc.id.au'};
     }
-    open FH, '|-', @args;
+    open FH, '| sendmail -t';
+    print FH <<EOF;
+From: SVG Working Group Apprentice <cam+svgwg-apprentice\@mcc.id.au>
+Subject: [svgwg] spec issues
+$recipients
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+EOF
     if (0) {
       for (sort keys %culprits) {
         print FH "(to $_)\n";
@@ -402,14 +410,20 @@ if (@errors) {
       $culprits{$_} = 1 if /@/;
     }
     close FH;
-    my @args = ('mail', '-r', 'SVG Working Group Apprentice <cam+svgwg-apprentice@mcc.id.au>', '-s', '[svgwg] spec issues resolved');
-    push @args, '-c', 'cam@mcc.id.au' unless exists $culprits{'cam@mcc.id.au'};
+    my $recipients;
     if (0) {
-      push @args, 'cam@mcc.id.au';
+      $recipients = "To: cam\@mcc.id.au";
     } else {
-      push @args, sort keys %culprits;
+      $recipients = 'To: ' . join(', ', sort keys %culprits) . "";
+      $recipients .= "\nCc: cam\@mcc.id.au" unless exists $culprits{'cam@mcc.id.au'};
     }
-    open FH, '|-', @args;
+    open FH, '| sendmail -t';
+    print FH <<EOF;
+From: SVG Working Group Apprentice <cam+svgwg-apprentice\@mcc.id.au>
+Subject: [svgwg] spec issues resolved
+$recipients
+
+EOF
     if (0) {
       for (sort keys %culprits) {
         print FH "(to $_)\n";
