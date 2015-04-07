@@ -14,6 +14,7 @@
 use strict;
 
 use Date::Parse;
+use File::Temp 'tempfile';
 
 my $HOME = $ENV{HOME};
 die "\$HOME is not set" unless defined $HOME;
@@ -49,7 +50,7 @@ my $this_rev = `cd $dir/.linter-repo/svgwg && ( git log -1 | grep '^commit ' | h
 chomp $this_rev;
 die "could not get this rev" unless $this_rev =~ /^[0-9a-f]+$/;
 
-exit if $last_rev eq $this_rev;
+# exit if $last_rev eq $this_rev;
 
 mkdir "$dir/.linter-state" unless -d "$dir/.linter-state";
 
@@ -314,6 +315,36 @@ for my $url (sort keys %links_without_refs) {
       push @errors, "$_: broken link $url ($reason)";
     }
   }
+}
+
+# Now do validation.
+
+sub erase {
+  my $s = shift;
+  $s =~ s/[^\n]/ /g;
+  return $s;
+}
+
+for my $fn (@files) {
+  local $/;
+  open FH, "$dir/.linter-repo/svgwg/$fn";
+  my $content = <FH>;
+  close FH;
+  $content =~ s/(<\?xml.*?\?>)/erase($1)/se;
+  $content =~ s/<!DOCTYPE.*?>/<!DOCTYPE html>/s;
+  $content =~ s/(xmlns:.*?=(".*?"|'.*?'))/erase($1)/gse;
+  $content =~ s/(<edit:[a-z]+\s*.*?>)/erase($1)/gse;
+  $content =~ s/(<\/edit:[a-z]+>)/erase($1)/gse;
+  $content =~ s/(\sedit:[a-z]+=(".*?"|'.*?'))/erase($1)/gse;
+  $content =~ s/(<!\[CDATA\[.*?\]\]>)/erase($1)/gse;
+  $content =~ s/(href=["'])(\[.*?\])/$1 . erase($2)/gse;
+  my ($fh, $filename) = tempfile();
+  print $fh $content;
+  close $fh;
+  for (split(/\n/, `curl -s -H "Content-Type: text/html; charset=utf-8" --data-binary \@$filename http://validator.w3.org/nu/?out=gnu`)) {
+    push @errors, "$fn:$_";
+  }
+  unlink $filename;
 }
 
 my %culprits = ();
