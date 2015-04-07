@@ -343,7 +343,7 @@ for my $fn (@files) {
   print $fh $content;
   close $fh;
   for (split(/\n/, `curl -s -H "Content-Type: text/html; charset=utf-8" --data-binary \@$filename http://validator.w3.org/nu/?out=gnu`)) {
-    push @errors, "$fn:$_";
+    push @errors, "$fn$_";
   }
   unlink $filename;
 }
