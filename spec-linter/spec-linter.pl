@@ -10,6 +10,9 @@
 #
 # Create a file named ~/.svgwg-utils/linter that has a list of specification
 # master files in the SVG WG repostiory to check, one per line.
+#
+# If a file named ~/.svgwg-utils/linter-ignore exists, then each line is
+# taken as a URL that will be skipped when doing broken link checks.
 
 use strict;
 
@@ -28,6 +31,7 @@ unless (-d $dir) {
 die "could not read $dir/linter" unless -f "$dir/linter";
 
 my @files = ();
+my %ignore = ();
 
 open FH, "$dir/linter" or die "could not read ~/.svgwg-utils/linter";
 while (<FH>) {
@@ -35,6 +39,15 @@ while (<FH>) {
   push @files, $_;
 }
 close FH;
+
+if (-f "$dir/linter-ignore") {
+  open FH, "$dir/linter-ignore" or die "could not read ~/.svgwg-utils/linter-ignore";
+  while (<FH>) {
+    chomp;
+    $ignore{$_} = 1;
+  }
+  close FH;
+}
 
 mkdir "$dir/.linter-repo" unless -d "$dir/.linter-repo";
 system "cd $dir/.linter-repo && git clone https://github.com/w3c/svgwg" unless -d "$dir/.linter-repo/svgwg";
@@ -83,6 +96,7 @@ my @links = ();
 for my $spec_dir (sort keys %spec_dirs) {
   for (split(/\n/, `cd $dir/.linter-repo/svgwg/$spec_dir && make list-external-links`)) {
     my ($file, $line, $col, $href) = /^([^:]+):(\d+):(\d+):(.*)/;
+    next if exists $ignore{$href};
     my $dir = $spec_dir eq '.' ? 'master' : "$spec_dir/master";
     while ($file =~ /^\.\.\//) {
       if ($dir =~ s/\/[^\/]+$//) {
@@ -137,19 +151,6 @@ sub escape_fn {
   $s =~ s/([^a-z0-9])/escape_fn_char($1)/ge;
   return $s;
 }
-
-# network rules:
-#   - if we are checking for the existence of an entire document:
-#       - if we have a response cached and it is not fresh,
-#           or if we do not have a response cached, fetch and cache it
-#       - if we have a response cached and it is fresh, use the cached response
-#   - if we are checking for the existence of an ID within a document:
-#       - if we have a response cached and it is not fresh,
-#           or if we do not have a response cached, fetch and cache it
-#       - if we have a response cached and it is fresh,
-#           and if the ID is not present in the document, fetch and cache it
-#
-# always fetch using If-Modified-Since
 
 sub read_headers {
   my $fh = shift;
