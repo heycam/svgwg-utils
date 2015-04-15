@@ -280,6 +280,10 @@ for my $url (sort keys %links_with_refs) {
     $reason = "HTTP status $status";
   }
   if (defined $reason) {
+    if ($reason eq 'timeout' || $reason eq 'could not connect to host') {
+      # skip these silently
+      next;
+    }
     for my $fragment (keys %$fragments) {
       my $locations = $fragments->{$fragment};
       for (keys %$locations) {
@@ -312,6 +316,10 @@ for my $url (sort keys %links_without_refs) {
     $reason = "HTTP status $status";
   }
   if (defined $reason) {
+    if ($reason eq 'timeout' || $reason eq 'could not connect to host') {
+      # skip these silently
+      next;
+    }
     for (keys %{$links_without_refs{$url}}) {
       push @errors, "$_: broken link $url ($reason)";
     }
