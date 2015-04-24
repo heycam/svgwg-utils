@@ -356,12 +356,21 @@ for my $fn (@files) {
   unlink $filename;
 }
 
+sub munge_email {
+  my $e = shift;
+  if ($e eq 'birtles@gmail.com') {
+    return 'bbirtles@mozilla.com';
+  }
+  return $e;
+}
+
 my %culprits = ();
 if (-f "$dir/.linter-state/culprits") {
   open FH, "$dir/.linter-state/culprits";
   while (<FH>) {
     chomp;
-    $culprits{$_} = 1;
+    my $email = munge_email($_);
+    $culprits{$email} = 1;
   }
   close FH;
 }
@@ -370,7 +379,8 @@ if (@errors) {
   open FH, "cd $dir/.linter-repo/svgwg && git log --format='%ae' $last_rev..$this_rev |";
   while (<FH>) {
     chomp;
-    $culprits{$_} = 1 if /@/;
+    my $email = munge_email($_);
+    $culprits{$email} = 1 if /@/;
   }
   close FH;
   if (%culprits) {
