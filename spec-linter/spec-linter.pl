@@ -189,7 +189,7 @@ sub fetch {
   my $url = shift;
   my $method = shift;
   die unless $method eq 'HEAD' || $method eq 'GET';
-  my $options = '-s -m 30 -H "Accept: text/html,*/*;q=0.9"';
+  my $options = '-k -s -m 30 -H "Accept: text/html,*/*;q=0.9"';
   $options .= $method eq 'HEAD' ? ' -I' : ' -i';
   my $cache_good_result_even_without_known_freshness = shift;
   my $key = escape_fn($url);
