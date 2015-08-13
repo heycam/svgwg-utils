@@ -300,8 +300,11 @@ for my $url (sort keys %links_with_refs) {
   }
 
   for my $fragment (keys %$fragments) {
+    my $respec_dfn = $fragment;
+    my $has_respec_dfn = $respec_dfn =~ s/^dfn-//;
     unless ($contents =~ /\s(?:(?i)id)=(?:$fragment|'$fragment'|"$fragment")(?:\s|>)/ ||
-            $contents =~ /<(?:[Aa])\s+[^>]*(?:(?i)name)=(?:$fragment|'$fragment'|"$fragment")/) {
+            $contents =~ /<(?:[Aa])\s+[^>]*(?:(?i)name)=(?:$fragment|'$fragment'|"$fragment")/ ||
+            ($has_respec_dfn && $contents =~ /<dfn>$respec_dfn<\/dfn>/)) {
       my $locations = $fragments->{$fragment};
       for (keys %$locations) {
         push @errors, "$_: broken link $url (fragment $fragment not found)";
