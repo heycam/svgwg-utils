@@ -121,7 +121,7 @@ sub percent_encode {
 
 sub escape_url {
   my $s = shift;
-  $s =~ s{([^A-Za-z0-9._~:/?#@!\$&()*+,;=%-])}{percent_encode($1)}ge;
+  $s =~ s{([^A-Za-z0-9._~:/?#@!\$&()+,;=%-])}{percent_encode($1)}ge;
   return $s;
 }
 
