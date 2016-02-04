@@ -131,6 +131,10 @@ for (@links) {
   my ($file, $line, $col, $href) = /^([^:]+):(\d+):(\d+):(.*)/;
   next if $href =~ /log\.csswg\.org/;
   $href = escape_url($href);
+  if ($href =~ /embedding-custom/) {
+    # work around a bug
+    next;
+  }
   if ($href =~ /(.*)#(.*)/) {
     $links_with_refs{$1} = { } unless exists $links_with_refs{$1};
     $links_with_refs{$1}{$2} = { } unless exists $links_with_refs{$1}{$2};
